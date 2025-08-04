@@ -4,7 +4,7 @@ import { type ProductAnalysisData } from '../lib/ProductAnalysisReader';
 import { logger } from '../lib/logger';
 
 const ROOT_URL =
-  import.meta.env.VITE_ROOT_URL || 'https://zah-2.123c.vn/hackathon/api';
+  import.meta.env.VITE_ROOT_URL || 'https://be-zaassistant.vercel.app/api';
 const BASE_URL = `${ROOT_URL}/responses`;
 
 // Types for API requests and responses
