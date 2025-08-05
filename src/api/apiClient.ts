@@ -307,7 +307,7 @@ export async function ideaToAnalysis(
   });
 
   const response = await postJSON<{ analysis_board: ProductAnalysisData }>(
-    'idea_to_analysis',
+    'responses/idea_to_analysis',
     {
       inputData: JSON.stringify(inputData),
     }
@@ -338,7 +338,7 @@ export async function productCritique(
     analysisBoardSize: JSON.stringify(request.analysis_board).length,
   });
 
-  const response = await postJSON('product_critique', request);
+  const response = await postJSON('responses/product_critique', request);
 
   logger.info(`productCritique completed`, {
     success: response.success,
@@ -366,7 +366,7 @@ export async function assessmentCenter(
     productCritiqueSize: JSON.stringify(request.product_critique).length,
   });
 
-  const response = await postJSON('assessment_center', request);
+  const response = await postJSON('responses/assessment_center', request);
 
   logger.info(`assessmentCenter completed`, {
     success: response.success,
@@ -390,7 +390,7 @@ export async function solutionArchitect(
     analysisBoardSize: JSON.stringify(request.analysis_board).length,
   });
 
-  const response = await postJSON('solution_architect', request);
+  const response = await postJSON('responses/solution_architect', request);
 
   logger.info(`solutionArchitect completed`, {
     success: response.success,
@@ -415,7 +415,7 @@ export async function solutionToUI(
       request.selected_approach?.implementation_risk_analysis.length,
   });
 
-  const response = await postJSON('solution_to_ui', request);
+  const response = await postJSON('responses/solution_to_ui', request);
 
   logger.info(`solutionToUI completed`, {
     success: response.success,
@@ -427,7 +427,7 @@ export async function solutionToUI(
   return response;
 }
 
-// Simplified Solution to UI API - only requires a prompt
+// Solution to UI from prompt API
 export async function solutionToUIFromPrompt(
   prompt: string
 ): Promise<APIResponse<any>> {
@@ -436,12 +436,9 @@ export async function solutionToUIFromPrompt(
     promptLength: prompt.length,
   });
 
-  // Create a simplified request structure
-  const request: SolutionToUIRequest = {
-    problem_statement: prompt,
-  };
-
-  const response = await postJSON('solution_to_ui', request);
+  const response = await postJSON('responses/solution_to_ui', {
+    prompt: prompt,
+  });
 
   logger.info(`solutionToUIFromPrompt completed`, {
     success: response.success,
