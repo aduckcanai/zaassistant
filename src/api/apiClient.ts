@@ -3,9 +3,8 @@
 import { type ProductAnalysisData } from '../lib/ProductAnalysisReader';
 import { logger } from '../lib/logger';
 
-const ROOT_URL =
-  import.meta.env.VITE_ROOT_URL || 'https://be-zaassistant.vercel.app/api';
-const BASE_URL = `${ROOT_URL}/responses`;
+const ROOT_URL = 'https://be-zaassistant.vercel.app/api';
+const BASE_URL = ROOT_URL;
 
 // Types for API requests and responses
 export interface IdeaToAnalysisRequest {
@@ -38,6 +37,49 @@ export interface SolutionToUIRequest {
       mitigation_idea: string;
       resulting_tradeoff: string;
     }>;
+  };
+}
+
+export interface UpdateAnalysisFieldRequest {
+  analysis_board: {
+    product_goal: string;
+    business_goal?: string;
+    user_problem_goal: {
+      problem: string;
+      user_goal: string;
+    };
+    target_segments: string[];
+    user_insights_data: Array<{
+      insight: string;
+      evidence: string;
+    }>;
+    scope: {
+      in_scope: string[];
+      out_scope: string[];
+      constraints: string[];
+    };
+    success_metrics: Array<{
+      name: string;
+      type: 'engagement' | 'ops' | 'retention' | 'revenue';
+      formula: string;
+      target: string;
+    }>;
+    key_assumptions_open_questions?: string;
+  };
+  field_name: string;
+  updated_field: {
+    instruction?: string;
+    [key: string]: any;
+  };
+}
+
+export interface UpdateAnalysisFieldResponse {
+  id: string;
+  field_name: string;
+  updated_value: {
+    problem?: string;
+    user_goal?: string;
+    [key: string]: any;
   };
 }
 
@@ -152,6 +194,13 @@ async function postJSON<T>(
 ): Promise<APIResponse<T>> {
   const requestId = Math.random().toString(36).substring(2, 15);
 
+  console.log('🔍 postJSON Debug:', {
+    endpoint,
+    requestId,
+    url: `${BASE_URL}/${endpoint}`,
+    payload,
+  });
+
   const operation = async (): Promise<APIResponse<T>> => {
     try {
       logger.info(`API Request Started`, {
@@ -164,6 +213,8 @@ async function postJSON<T>(
 
       const startTime = performance.now();
 
+      console.log('🔍 Making HTTP request to:', `${BASE_URL}/${endpoint}`);
+
       const res = await fetch(`${BASE_URL}/${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -172,6 +223,13 @@ async function postJSON<T>(
 
       const endTime = performance.now();
       const duration = Math.round(endTime - startTime);
+
+      console.log('🔍 HTTP Response:', {
+        status: res.status,
+        statusText: res.statusText,
+        ok: res.ok,
+        duration: `${duration}ms`,
+      });
 
       logger.info(`API Response Received`, {
         endpoint,
@@ -197,6 +255,8 @@ async function postJSON<T>(
 
       const data = await res.json();
 
+      console.log('🔍 Response data:', data);
+
       logger.info(`API Request Successful`, {
         endpoint,
         requestId,
@@ -213,6 +273,8 @@ async function postJSON<T>(
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : String(error);
+
+      console.error('🔍 API Error:', error);
 
       logger.error(`API Request Exception`, {
         endpoint,
@@ -566,6 +628,43 @@ export async function getSamplePrompts(): Promise<
   return withRetry(operation, 'sample-prompts', requestId);
 }
 
+// Update analysis field API
+export async function updateAnalysisField(
+  request: UpdateAnalysisFieldRequest
+): Promise<APIResponse<UpdateAnalysisFieldResponse>> {
+  const requestId = Math.random().toString(36).substring(2, 15);
+
+  console.log('🔍 API Client Debug - updateAnalysisField called:', {
+    requestId,
+    fieldName: request.field_name,
+    analysisBoardKeys: Object.keys(request.analysis_board),
+    request: request,
+  });
+
+  logger.info(`updateAnalysisField called`, {
+    requestId,
+    fieldName: request.field_name,
+    analysisBoardKeys: Object.keys(request.analysis_board),
+  });
+
+  const response = await postJSON<UpdateAnalysisFieldResponse>(
+    'field-edit',
+    request
+  );
+
+  console.log('🔍 API Client Debug - updateAnalysisField response:', response);
+
+  logger.info(`updateAnalysisField completed`, {
+    requestId,
+    success: response.success,
+    hasData: !!response.data,
+    fieldName: response.data?.field_name,
+    error: response.error,
+  });
+
+  return response;
+}
+
 // Export all API functions
 export const apiClient = {
   ideaToAnalysis,
@@ -577,6 +676,7 @@ export const apiClient = {
   mobilePrototype,
   healthCheck,
   getSamplePrompts,
+  updateAnalysisField,
 };
 
 export default apiClient;

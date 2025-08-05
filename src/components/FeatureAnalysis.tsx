@@ -19,13 +19,15 @@ import { AIThinking } from './AIThinking';
 import { MagicEditPopover } from './MagicEditPopover';
 
 import { type ProductAnalysisData } from '../lib/ProductAnalysisReader';
-import { productCritique, assessmentCenter } from '../api/apiClient';
+import { productCritique, assessmentCenter, apiClient } from '../api/apiClient';
 import { critiqueResponseParser } from '../lib/CritiqueResponseParser';
 import { assessmentResponseParser } from '../lib/AssessmentResponseParser';
 import { HistoryManager } from '../lib/HistoryManager';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { CacheManager } from '../lib/cache';
+import { convertUIToAPIData, convertUIFieldNameToAPI } from '../lib/utils';
+import { logger } from '../lib/logger';
 
 interface FieldData {
   value: string;
@@ -408,32 +410,102 @@ export function FeatureAnalysis({
   ) => {
     if (!instruction.trim() || !analysisData) return;
     
+    console.log('🔍 Magic Edit Debug:', { field, instruction });
+    
     setIsEditing(true);
     
     // Save current state before magic edit
     saveVersion(`Before Magic Edit: ${field}`, analysisData);
     
-    // Apply the instruction directly to the field
-    const currentField = analysisData[field];
-    if (!currentField) {
-      setIsEditing(false);
-      setMagicEditField(null);
-      return;
-    }
+    try {
+      // Convert UI data to API format
+      const apiData = convertUIToAPIData(analysisData);
+      const apiFieldName = convertUIFieldNameToAPI(field);
+      
+      console.log('🔍 API Request Debug:', {
+        apiData,
+        apiFieldName,
+        instruction,
+        request: {
+          analysis_board: apiData,
+          field_name: apiFieldName,
+          updated_field: {
+            instruction: instruction,
+          },
+        }
+      });
+      
+      // Call the API
+      let updatedField: any = {};
+      if (apiFieldName === 'user_problem_goal') {
+        updatedField = {
+          problem: instruction,
+          user_goal: instruction,
+        };
+      } else {
+        updatedField = { value: instruction };
+      }
+      const response = await apiClient.updateAnalysisField({
+        analysis_board: apiData,
+        field_name: apiFieldName,
+        updated_field: updatedField,
+      });
 
-    const currentValue = currentField.value || '';
-    const newValue = currentValue + ' ' + instruction;
+      console.log('🔍 API Response Debug:', response);
+
+      if (response.success && response.data) {
+        // Update the field with the API response
+        const updatedValue = response.data.updated_value;
+        let newValue = '';
+        
+        // Handle different field types
+        if (apiFieldName === 'user_problem_goal') {
+          const problemValue = typeof updatedValue === 'object' && updatedValue?.problem ? updatedValue.problem : '';
+          const goalValue = typeof updatedValue === 'object' && updatedValue?.user_goal ? updatedValue.user_goal : '';
+          newValue = `Problem: ${problemValue}\nUser Goal: ${goalValue}`;
+        } else if (apiFieldName === 'target_segments') {
+          newValue = Array.isArray(updatedValue) ? updatedValue.join(', ') : String(updatedValue || '');
+        } else if (apiFieldName === 'user_insights_data') {
+          newValue = Array.isArray(updatedValue) 
+            ? updatedValue.map((insight: any) => `${insight.insight}: ${insight.evidence}`).join('\n\n')
+            : String(updatedValue || '');
+        } else {
+          newValue = typeof updatedValue === 'string' ? updatedValue : String(updatedValue || '');
+        }
+        
+        const newData = {
+          ...analysisData,
+          [field]: { value: newValue, isAIGenerated: true },
+        };
+        
+        setAnalysisData(newData);
+        saveVersion(`Magic Edit Complete: ${field}`, newData);
+        
+        toast.success('Field updated successfully!');
+        logger.info('Magic edit completed successfully', {
+          field,
+          instruction,
+          responseId: response.data.id,
+        });
+      } else {
+        throw new Error(response.error || 'Failed to update field');
+      }
+    } catch (error) {
+      console.error('🔍 Magic Edit Error:', error);
+      logger.error('Magic edit failed', { field, instruction, error });
+      toast.error('Failed to update field. Please try again.');
       
-      const newData = {
-        ...analysisData,
-      [field]: { value: newValue, isAIGenerated: true },
-      };
-      
-      setAnalysisData(newData);
-      saveVersion(`Magic Edit Complete: ${field}`, newData);
-      
+      // Revert to previous state on error
+      if (versionHistory.length > 0) {
+        const previousVersion = versionHistory[currentVersionIndex];
+        if (previousVersion) {
+          setAnalysisData(previousVersion.data);
+        }
+      }
+    } finally {
       setIsEditing(false);
       setMagicEditField(null);
+    }
   };
 
   const handleFieldUpdate = useCallback(
